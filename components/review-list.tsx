@@ -15,7 +15,6 @@ interface ReviewListProps {
   selectedReviewId?: string | null
 }
 
-// 파일 확장자별 아이콘 매핑
 const getFileIcon = (extension: string): FileType => {
   const ext = extension.toLowerCase()
   
@@ -47,7 +46,6 @@ const getFileIcon = (extension: string): FileType => {
   return 'other'
 }
 
-// 파일 타입별 아이콘 컴포넌트
 const FileTypeIcon = ({ fileType, className }: { fileType: FileType; className?: string }) => {
   const iconProps = { className: cn("h-4 w-4", className) }
   
@@ -89,7 +87,6 @@ const FileTypeIcon = ({ fileType, className }: { fileType: FileType; className?:
   }
 }
 
-// Diff 통계 계산 (추가/삭제 라인 수)
 const getDiffStats = (diffContent: string) => {
   const lines = diffContent.split('\n')
   let added = 0
@@ -104,6 +101,13 @@ const getDiffStats = (diffContent: string) => {
   })
   
   return { added, removed }
+}
+
+const getFileInfo = (filePath: string) => {
+  const parts = filePath.split('/')
+  const fileName = parts.pop() || ''
+  const directory = parts.join('/')
+  return { fileName, directory }
 }
 
 export function ReviewList({ 
@@ -171,7 +175,6 @@ export function ReviewList({
 
       <div className="flex-1 overflow-y-auto">
         {activeTab === "reviews" ? (
-          // 리뷰 목록 표시
           filteredReviews.length > 0 ? (
             filteredReviews.map((review) => (
               <button
@@ -213,20 +216,20 @@ export function ReviewList({
             </div>
           )
         ) : (
-          // Diff 파일 목록 표시
           filteredDiffs.length > 0 ? (
             filteredDiffs.map((diff) => {
               const fileType = getFileIcon(diff.fileExtension)
               const stats = getDiffStats(diff.diffContent)
               const isSelected = selectedFileId === diff.id
+              const { fileName, directory } = getFileInfo(diff.filePath)
               
               return (
                 <button
                   key={diff.id}
                   onClick={() => onFileSelect(diff.id)}
                   className={cn(
-                    "w-full text-left p-4 border-b border-border transition-colors hover:bg-muted",
-                    isSelected && "bg-muted",
+                    "w-full text-left p-4 border-b border-border transition-colors hover:bg-muted/50",
+                    isSelected && "bg-muted border-l-4 border-primary",
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -234,22 +237,24 @@ export function ReviewList({
                       <FileTypeIcon fileType={fileType} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm text-foreground mb-1 text-balance truncate">
-                        {diff.filePath.split('/').pop()}
-                      </h3>
-                      <p className="text-xs text-muted-foreground truncate mb-2">
-                        {diff.filePath}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Plus className="h-3 w-3 text-green-600" />
-                          {stats.added}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Minus className="h-3 w-3 text-red-600" />
-                          {stats.removed}
-                        </span>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-medium text-sm text-foreground truncate">
+                          {fileName}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                            <Plus className="h-3 w-3" />
+                            {stats.added}
+                          </span>
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                            <Minus className="h-3 w-3" />
+                            {stats.removed}
+                          </span>
+                        </div>
                       </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {directory}
+                      </p>
                     </div>
                   </div>
                 </button>

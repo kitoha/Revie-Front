@@ -1,7 +1,6 @@
-// API 응답 타입 정의
 
 export interface ReviewSession {
-  id: string
+  id: string  
   userId: string
   pullRequestUrl: string
   title: string
@@ -12,18 +11,59 @@ export interface ReviewSession {
 
 export interface DiffItem {
   id: string
+  sessionId: string
   filePath: string
-  diffContent: string
+  fileName: string
   fileExtension: string
+  directoryPath: string
+  diffContent: string
+  contentHash: string
+  embedding?: number[] | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface DiffResponse {
-  success: boolean
-  data: DiffItem[]
+  sessionId: string
+  totalFiles: number
+  diffs: DiffItem[]
 }
 
+export interface DiffCountResponse {
+  sessionId: string
+  totalCount: number
+}
 
-// 리뷰 목록 타입
+export interface Message {
+  role: 'USER' | 'ASSISTANT'
+  content: string
+  timestamp: string
+}
+
+export interface ChatHistoryResponse {
+  sessionId: string
+  messages: Message[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FetchPRResponse {
+  sessionId: string
+  filesChanged: number
+  totalAdditions: number
+  totalDeletions: number
+  files: string[]
+}
+
+export interface CompressionStats {
+  fileCount: number
+  totalOriginalSize: number
+  totalCompressedSize: number
+  compressionRatio: number
+  savedBytes: number
+  compressionPercentage: number
+}
+
 export interface ReviewListDto {
   sessionId: string
   title: string
@@ -35,7 +75,6 @@ export interface ReviewListDto {
   updatedAt: string
 }
 
-// UI 상태 타입
 export interface ReviewState {
   sessionId: string | null
   pullRequestUrl: string
@@ -45,5 +84,4 @@ export interface ReviewState {
   error: string | null
 }
 
-// 파일 확장자별 아이콘 타입
 export type FileType = 'js' | 'ts' | 'tsx' | 'jsx' | 'py' | 'java' | 'go' | 'rs' | 'php' | 'rb' | 'cpp' | 'c' | 'cs' | 'swift' | 'kt' | 'scala' | 'sh' | 'sql' | 'json' | 'yaml' | 'yml' | 'xml' | 'html' | 'css' | 'scss' | 'sass' | 'less' | 'md' | 'txt' | 'other'

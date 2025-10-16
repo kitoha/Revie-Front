@@ -204,6 +204,74 @@
     }
   }
   
+  /* 커스텀 스크롤바 */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.6 0.01 260) oklch(0.9 0.01 260);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: oklch(0.9 0.01 260);
+    border-radius: 4px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: oklch(0.6 0.01 260);
+    border-radius: 4px;
+    border: 1px solid oklch(0.9 0.01 260);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.5 0.01 260);
+  }
+  
+  /* 다크 모드 스크롤바 */
+  .dark .scrollbar-thin {
+    scrollbar-color: oklch(0.4 0.01 260) oklch(0.15 0.01 260);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-track {
+    background: oklch(0.15 0.01 260);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: oklch(0.4 0.01 260);
+    border: 1px solid oklch(0.15 0.01 260);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.5 0.01 260);
+  }
+  
+  /* 코드 뷰어 전용 스크롤바 */
+  .code-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.5 0.01 260) transparent;
+  }
+  
+  .code-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .code-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .code-scrollbar::-webkit-scrollbar-thumb {
+    background: oklch(0.5 0.01 260);
+    border-radius: 3px;
+  }
+  
+  .code-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.4 0.01 260);
+  }
+  
   /* 모바일 뷰포트 최적화 */
   @media (max-width: 768px) {
     /* 작은 화면에서 패딩 조정 */

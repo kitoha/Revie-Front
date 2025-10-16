@@ -13,7 +13,6 @@ interface CodeViewerProps {
   sessionTitle?: string
 }
 
-// Diff 내용을 파싱하여 라인별 정보 추출
 const parseDiffContent = (diffContent: string) => {
   const lines = diffContent.split('\n')
   const parsedLines: Array<{
@@ -22,27 +21,29 @@ const parseDiffContent = (diffContent: string) => {
     type: 'added' | 'removed' | 'context' | 'header'
     originalLineNum?: number
     newLineNum?: number
+    isHunkHeader?: boolean
   }> = []
 
   let lineNumber = 1
   let originalLineNum = 0
   let newLineNum = 0
+  let currentHunkStart = 0
 
   for (const line of lines) {
     if (line.startsWith('@@')) {
-      // 헤더 라인 (예: @@ -10,5 +10,8 @@)
       const match = line.match(/@@ -(\d+),?\d* \+(\d+),?\d* @@/)
       if (match) {
         originalLineNum = parseInt(match[1]) - 1
         newLineNum = parseInt(match[2]) - 1
+        currentHunkStart = lineNumber
       }
       parsedLines.push({
         num: lineNumber++,
         content: line,
-        type: 'header'
+        type: 'header',
+        isHunkHeader: true
       })
     } else if (line.startsWith('+') && !line.startsWith('+++')) {
-      // 추가된 라인
       newLineNum++
       parsedLines.push({
         num: lineNumber++,
@@ -52,7 +53,6 @@ const parseDiffContent = (diffContent: string) => {
         newLineNum
       })
     } else if (line.startsWith('-') && !line.startsWith('---')) {
-      // 삭제된 라인
       originalLineNum++
       parsedLines.push({
         num: lineNumber++,
@@ -62,7 +62,6 @@ const parseDiffContent = (diffContent: string) => {
         newLineNum
       })
     } else {
-      // 컨텍스트 라인
       originalLineNum++
       newLineNum++
       parsedLines.push({
@@ -81,10 +80,11 @@ const parseDiffContent = (diffContent: string) => {
 export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle }: CodeViewerProps) {
   const [hoveredLine, setHoveredLine] = useState<number | null>(null)
 
-  const selectedDiff = diffs.find(diff => diff.id === selectedFileId)
+  const safeDiffs = Array.isArray(diffs) ? diffs : []
+  const selectedDiff = safeDiffs.find(diff => diff.id === selectedFileId)
   const parsedLines = selectedDiff ? parseDiffContent(selectedDiff.diffContent) : []
 
-  if (diffs.length === 0) {
+  if (safeDiffs.length === 0) {
     return (
       <main className="flex-1 lg:flex-1 flex flex-col bg-code-bg border-r-0 lg:border-r border-border">
         <header className="h-10 sm:h-12 border-b border-border bg-card/50 backdrop-blur-sm px-4 sm:px-6 flex items-center shadow-soft">
@@ -116,40 +116,65 @@ export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle }
         </h2>
       </header>
 
-      {/* 코드 내용 */}
-      <div className="flex-1 overflow-auto">
+      {/* 코드 내용 - GitHub 스타일 with 스크롤 */}
+      <div className="flex-1 overflow-auto code-scrollbar">
         {parsedLines.length > 0 ? (
-          <div className="font-mono text-xs sm:text-sm">
-            {parsedLines.map((line) => (
-              <div
-                key={line.num}
-                onMouseEnter={() => setHoveredLine(line.num)}
-                onMouseLeave={() => setHoveredLine(null)}
-                className={cn(
-                  "flex transition-smooth cursor-pointer group",
-                  line.type === 'added' && "bg-green-50 dark:bg-green-950/20 border-l-4 border-green-500",
-                  line.type === 'removed' && "bg-red-50 dark:bg-red-950/20 border-l-4 border-red-500",
-                  line.type === 'header' && "bg-blue-50 dark:bg-blue-950/20 border-l-4 border-blue-500",
-                  hoveredLine === line.num && "bg-code-line",
-                )}
-              >
-                <div className="w-12 sm:w-16 flex-shrink-0 text-right pr-2 sm:pr-4 py-1.5 sm:py-2 text-muted-foreground select-none group-hover:text-foreground transition-smooth text-xs sm:text-sm">
-                  {line.num}
-                </div>
-                <div className="flex-1 py-1.5 sm:py-2 pr-2 sm:pr-4">
-                  <code
+          <div className="font-mono text-xs sm:text-sm min-w-full">
+            {/* 가로 스크롤을 위한 컨테이너 */}
+            <div className="overflow-x-auto code-scrollbar">
+              <div className="min-w-max">
+                {parsedLines.map((line, index) => (
+                  <div
+                    key={line.num}
+                    onMouseEnter={() => setHoveredLine(line.num)}
+                    onMouseLeave={() => setHoveredLine(null)}
                     className={cn(
-                      "text-foreground transition-smooth break-words",
-                      line.type === 'added' && "text-green-700 dark:text-green-300",
-                      line.type === 'removed' && "text-red-700 dark:text-red-300",
-                      line.type === 'header' && "text-blue-700 dark:text-blue-300 font-semibold",
+                      "flex transition-smooth cursor-pointer group relative min-w-max",
+                      line.type === 'added' && "bg-green-50 dark:bg-green-950/20",
+                      line.type === 'removed' && "bg-red-50 dark:bg-red-950/20",
+                      line.type === 'header' && "bg-blue-50 dark:bg-blue-950/20 font-semibold",
+                      hoveredLine === line.num && "bg-accent/50",
                     )}
                   >
-                    {line.content}
-                  </code>
-                </div>
+                    {/* 라인 번호 컬럼 */}
+                    <div className="flex-shrink-0 w-12 sm:w-16 text-right pr-2 sm:pr-4 py-1.5 sm:py-2 text-muted-foreground select-none group-hover:text-foreground transition-smooth text-xs sm:text-sm border-r border-border">
+                      {line.originalLineNum !== undefined && line.originalLineNum > 0 ? line.originalLineNum : ''}
+                    </div>
+                    <div className="flex-shrink-0 w-12 sm:w-16 text-right pr-2 sm:pr-4 py-1.5 sm:py-2 text-muted-foreground select-none group-hover:text-foreground transition-smooth text-xs sm:text-sm border-r border-border">
+                      {line.newLineNum !== undefined && line.newLineNum > 0 ? line.newLineNum : ''}
+                    </div>
+                    
+                    {/* 라인 타입 인디케이터 */}
+                    <div className="flex-shrink-0 w-4 flex items-center justify-center py-1.5 sm:py-2">
+                      {line.type === 'added' && (
+                        <div className="w-0.5 h-full bg-green-500"></div>
+                      )}
+                      {line.type === 'removed' && (
+                        <div className="w-0.5 h-full bg-red-500"></div>
+                      )}
+                      {line.type === 'header' && (
+                        <div className="w-0.5 h-full bg-blue-500"></div>
+                      )}
+                    </div>
+                    
+                    {/* 코드 컨텐츠 - 가로 스크롤 허용 */}
+                    <div className="flex-1 py-1.5 sm:py-2 pr-2 sm:pr-4 min-w-0">
+                      <code
+                        className={cn(
+                          "text-foreground transition-smooth whitespace-pre",
+                          line.type === 'added' && "text-green-700 dark:text-green-300",
+                          line.type === 'removed' && "text-red-700 dark:text-red-300",
+                          line.type === 'header' && "text-blue-700 dark:text-blue-300 font-semibold",
+                          line.type === 'context' && "text-foreground",
+                        )}
+                      >
+                        {line.content}
+                      </code>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-full">

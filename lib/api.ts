@@ -1,4 +1,4 @@
-import { ReviewSession, DiffResponse, ReviewListDto } from './types'
+import { ReviewSession, DiffResponse, ReviewListDto, FetchPRResponse, ChatHistoryResponse, Message, CompressionStats, DiffCountResponse } from './types'
 
 const BASE_URL = 'http://localhost:8080/api'
 const USER_ID = 'user-123'
@@ -45,21 +45,27 @@ async function apiRequest<T>(
     if (error instanceof ApiError) {
       throw error
     }
-    
-    // 네트워크 에러 등
+
     throw new ApiError(0, error instanceof Error ? error.message : 'Unknown error')
   }
 }
 
-// 1. 리뷰 세션 생성
 export async function createReviewSession(pullRequestUrl: string): Promise<ReviewSession> {
   return apiRequest<ReviewSession>('/reviews', {
     method: 'POST',
-    body: JSON.stringify({ pullRequestUrl }),
+    body: JSON.stringify({ 
+      userId: USER_ID,
+      pullRequestUrl 
+    }),
   })
 }
 
-// 2. PR Diff 가져오기
+export async function fetchPRData(sessionId: string): Promise<FetchPRResponse> {
+  return apiRequest<FetchPRResponse>(`/reviews/${sessionId}/fetch-pr`, {
+    method: 'POST',
+  })
+}
+
 export async function importPRDiff(sessionId: string, pullRequestUrl: string): Promise<void> {
   const params = new URLSearchParams({
     sessionId,
@@ -71,29 +77,128 @@ export async function importPRDiff(sessionId: string, pullRequestUrl: string): P
   })
 }
 
-// 3. Diff 목록 조회
-export async function getDiffs(sessionId: string): Promise<DiffResponse> {
-  return apiRequest<DiffResponse>(`/diffs/${sessionId}`)
+
+export async function getDiffs(sessionId: string): Promise<DiffItem[]> {
+  const response = await apiRequest<any>(`/diffs/${sessionId}`)
+  
+  if (response && response.success && Array.isArray(response.data)) {
+    return response.data
+  }
+  
+  if (Array.isArray(response)) {
+    return response
+  }
+  
+  console.warn('Unexpected response format:', response)
+  return []
 }
 
-// 4. 리뷰 목록 조회
+
+export async function getFileDiff(sessionId: string, filePath: string): Promise<DiffItem> {
+  const params = new URLSearchParams({ filePath })
+  return apiRequest<DiffItem>(`/diffs/${sessionId}/files?${params}`)
+}
+
+export async function getDiffCount(sessionId: string): Promise<DiffCountResponse> {
+  return apiRequest<DiffCountResponse>(`/diffs/${sessionId}/count`)
+}
+
+export function generateEmbeddings(
+  sessionId: string, 
+  onProgress: (file: string) => void, 
+  onComplete: () => void
+): EventSource {
+  const eventSource = new EventSource(`${BASE_URL}/reviews/${sessionId}/generate-embeddings`, {
+    withCredentials: false
+  })
+
+  eventSource.onmessage = (event) => {
+    const data = event.data
+    if (data.startsWith('✓ ')) {
+      const fileName = data.substring(2)
+      onProgress(fileName)
+    } else if (data.startsWith('Completed: ')) {
+      onComplete()
+      eventSource.close()
+    }
+  }
+
+  eventSource.onerror = (error) => {
+    console.error('SSE error:', error)
+    eventSource.close()
+  }
+
+  return eventSource
+}
+
+export function sendChatMessage(
+  sessionId: string,
+  message: string,
+  onChunk: (chunk: string) => void,
+  onComplete: () => void
+): EventSource {
+  const eventSource = new EventSource(`${BASE_URL}/chat/${sessionId}/stream`, {
+    withCredentials: false
+  })
+
+  fetch(`${BASE_URL}/chat/${sessionId}/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': USER_ID,
+    },
+    body: JSON.stringify({ message })
+  }).catch(error => {
+    console.error('Failed to send message:', error)
+    eventSource.close()
+  })
+
+  eventSource.onmessage = (event) => {
+    const data = event.data
+    if (data === '[DONE]') {
+      onComplete()
+      eventSource.close()
+    } else {
+      onChunk(data)
+    }
+  }
+
+  eventSource.onerror = (error) => {
+    console.error('SSE error:', error)
+    eventSource.close()
+  }
+
+  return eventSource
+}
+
+export async function getChatHistory(sessionId: string): Promise<ChatHistoryResponse> {
+  return apiRequest<ChatHistoryResponse>(`/chat/${sessionId}/history`)
+}
+
 export async function getReviewList(): Promise<ReviewListDto[]> {
   return apiRequest<ReviewListDto[]>('/reviews')
 }
 
-// 전체 PR 분석 플로우 (세션 생성 → Diff 가져오기 → Diff 목록 조회)
+export async function getCompressionStats(sessionId: string): Promise<CompressionStats> {
+  return apiRequest<CompressionStats>(`/reviews/${sessionId}/compression-stats`)
+}
+
+export async function deleteChatHistory(sessionId: string): Promise<void> {
+  return apiRequest<void>(`/chat/${sessionId}/history`, {
+    method: 'DELETE',
+  })
+}
+
 export async function analyzePullRequest(pullRequestUrl: string): Promise<{
   session: ReviewSession
-  diffs: DiffResponse
+  diffs: DiffItem[]
 }> {
   try {
-    // 1. 세션 생성
+    
     const session = await createReviewSession(pullRequestUrl)
     
-    // 2. PR Diff 가져오기
     await importPRDiff(session.id, pullRequestUrl)
     
-    // 3. Diff 목록 조회
     const diffs = await getDiffs(session.id)
     
     return { session, diffs }

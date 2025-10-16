@@ -6,43 +6,71 @@ import { TopNavigation } from "../components/top-navigation"
 import { CodeViewer } from "../components/code-viewer"
 import { ChatPanel } from "../components/chat-panel"
 import { MessageInput } from "../components/message-input"
+import { EmbeddingProgress } from "../components/embedding-progress"
 import { Button } from "../components/ui/button"
 import { Code, MessageSquare, AlertCircle } from "lucide-react"
 import { cn } from "../lib/utils"
-import { analyzePullRequest, getReviewList, getDiffs, ApiError } from "../lib/api"
-import { DiffItem, ReviewSession, ReviewListDto } from "../lib/types"
+import { analyzePullRequest, getReviewList, getDiffs, generateEmbeddings, sendChatMessage, getChatHistory, ApiError } from "../lib/api"
+import { DiffItem, ReviewSession, ReviewListDto, Message } from "../lib/types"
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<"code" | "chat">("code")
   
-  // PR 분석 상태
   const [session, setSession] = useState<ReviewSession | null>(null)
   const [diffs, setDiffs] = useState<DiffItem[]>([])
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // 리뷰 목록 상태
   const [reviewList, setReviewList] = useState<ReviewListDto[]>([])
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null)
+  
+  const [messages, setMessages] = useState<Message[]>([])
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  
+  const [isGeneratingEmbeddings, setIsGeneratingEmbeddings] = useState(false)
+  const [embeddingProgress, setEmbeddingProgress] = useState<{ total: number, completed: string[] }>({ total: 0, completed: [] })
+  const [showEmbeddingProgress, setShowEmbeddingProgress] = useState(false)
 
-  // PR 분석 시작
   const handleAnalyzePR = useCallback(async (pullRequestUrl: string) => {
     setIsLoading(true)
     setError(null)
     
     try {
+
       const { session: newSession, diffs: newDiffs } = await analyzePullRequest(pullRequestUrl)
       
       setSession(newSession)
-      setDiffs(newDiffs.data)
+      setDiffs(newDiffs)
+      setCurrentSessionId(newSession.id)
       
-      // 첫 번째 파일 자동 선택
-      if (newDiffs.data.length > 0) {
-        setSelectedFileId(newDiffs.data[0].id)
+      if (newDiffs.length > 0) {
+        setSelectedFileId(newDiffs[0].id)
       }
       
-      // 리뷰 목록 새로고침
+      //임베딩 생성 (현재 비활성화)
+      // setIsGeneratingEmbeddings(true)
+      // setShowEmbeddingProgress(true)
+      // setEmbeddingProgress({ total: newDiffs.length, completed: [] })
+      
+      // const fileNames = newDiffs.map(diff => diff.filePath)
+      
+      // const eventSource = generateEmbeddings(
+      //   newSession.id,
+      //   (fileName) => {
+      //     setEmbeddingProgress(prev => ({
+      //       ...prev,
+      //       completed: [...prev.completed, fileName]
+      //     }))
+      //   },
+      //   () => {
+      //     setIsGeneratingEmbeddings(false)
+      //     setShowEmbeddingProgress(false)
+      //     setActiveTab("chat") // 채팅 탭으로 자동 전환
+      //   }
+      // )
+      
       loadReviewList()
     } catch (err) {
       if (err instanceof ApiError) {
@@ -51,43 +79,45 @@ export default function HomePage() {
         setError('PR 분석 중 오류가 발생했습니다.')
       }
       console.error('PR 분석 오류:', err)
+      // setIsGeneratingEmbeddings(false)
+      // setShowEmbeddingProgress(false)
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  // 파일 선택
   const handleFileSelect = useCallback((fileId: string) => {
     setSelectedFileId(fileId)
   }, [])
 
-  // 리뷰 선택
   const handleReviewSelect = useCallback(async (sessionId: string) => {
     setSelectedReviewId(sessionId)
+    setCurrentSessionId(sessionId)
     setIsLoading(true)
     setError(null)
     
     try {
-      const diffsResponse = await getDiffs(sessionId)
-      setDiffs(diffsResponse.data)
+      const diffs = await getDiffs(sessionId)
+      setDiffs(diffs)
       
-      // 첫 번째 파일 자동 선택
-      if (diffsResponse.data.length > 0) {
-        setSelectedFileId(diffsResponse.data[0].id)
+      if (diffs.length > 0) {
+        setSelectedFileId(diffs[0].id)
       }
+      
+      const chatHistory = await getChatHistory(sessionId)
+      setMessages(chatHistory.messages)
     } catch (err) {
       if (err instanceof ApiError) {
         setError(`API 오류 (${err.status}): ${err.message}`)
       } else {
-        setError('Diff 가져오기 중 오류가 발생했습니다.')
+        setError('리뷰 로드 중 오류가 발생했습니다.')
       }
-      console.error('Diff 가져오기 오류:', err)
+      console.error('리뷰 로드 오류:', err)
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  // 리뷰 목록 로드
   const loadReviewList = useCallback(async () => {
     try {
       const reviews = await getReviewList()
@@ -97,7 +127,48 @@ export default function HomePage() {
     }
   }, [])
 
-  // 컴포넌트 마운트 시 리뷰 목록 로드
+  const handleSendMessage = useCallback(async (message: string) => {
+    if (!currentSessionId) return
+    
+    const userMessage: Message = {
+      role: 'USER',
+      content: message,
+      timestamp: new Date().toISOString()
+    }
+    setMessages(prev => [...prev, userMessage])
+    setIsStreaming(true)
+    
+    const assistantMessage: Message = {
+      role: 'ASSISTANT',
+      content: '',
+      timestamp: new Date().toISOString()
+    }
+    setMessages(prev => [...prev, assistantMessage])
+    
+    try {
+      const eventSource = sendChatMessage(
+        currentSessionId,
+        message,
+        (chunk) => {
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMessage = newMessages[newMessages.length - 1]
+            if (lastMessage.role === 'ASSISTANT') {
+              lastMessage.content += chunk
+            }
+            return newMessages
+          })
+        },
+        () => {
+          setIsStreaming(false)
+        }
+      )
+    } catch (err) {
+      console.error('메시지 전송 오류:', err)
+      setIsStreaming(false)
+    }
+  }, [currentSessionId])
+
   useEffect(() => {
     loadReviewList()
   }, [loadReviewList])
@@ -159,7 +230,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 모바일에서는 탭 전환, 데스크톱에서는 가로 분할 */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         <div className={cn(
           "flex-1 flex flex-col",
@@ -178,11 +248,27 @@ export default function HomePage() {
           activeTab === "chat" ? "flex" : "hidden",
           "lg:flex"
         )}>
-          <ChatPanel />
+          <ChatPanel 
+            sessionId={currentSessionId}
+            messages={messages}
+            isStreaming={isStreaming}
+          />
         </div>
       </div>
 
-      <MessageInput />
+      <MessageInput 
+        sessionId={currentSessionId}
+        onSendMessage={handleSendMessage}
+        disabled={isStreaming}
+      />
+
+      {/* 임베딩 진행상황 모달 (현재 비활성화) */}
+      {/* <EmbeddingProgress
+        isOpen={showEmbeddingProgress}
+        files={embeddingProgress.completed}
+        completedFiles={embeddingProgress.completed}
+        onClose={() => setShowEmbeddingProgress(false)}
+      /> */}
     </div>
   )
 }

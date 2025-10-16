@@ -6,8 +6,33 @@ import { Button } from "./ui/button"
 import { Textarea } from "./ui/textarea"
 import { useState } from "react"
 
-export function MessageInput() {
+interface MessageInputProps {
+  sessionId?: string | null
+  onSendMessage?: (message: string) => void
+  disabled?: boolean
+}
+
+export function MessageInput({ sessionId, onSendMessage, disabled = false }: MessageInputProps) {
   const [input, setInput] = useState("")
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (input.trim() && !disabled && onSendMessage) {
+      onSendMessage(input.trim())
+      setInput("")
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit(e)
+    }
+  }
+
+  if (!sessionId) {
+    return null
+  }
 
   return (
     <div className="border-t border-border bg-card/50 backdrop-blur-sm shadow-soft">
@@ -21,14 +46,22 @@ export function MessageInput() {
             <Textarea
               value={input}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Ask AI to review your code..."
-              className="min-h-[50px] sm:min-h-[60px] pr-20 sm:pr-24 resize-none bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl shadow-soft text-sm"
+              disabled={disabled}
+              className="min-h-[50px] sm:min-h-[60px] pr-20 sm:pr-24 resize-none bg-background border-border text-foreground placeholder:text-muted-foreground rounded-xl shadow-soft text-sm disabled:opacity-50"
             />
             <div className="absolute bottom-1.5 sm:bottom-2 right-1.5 sm:right-2 flex gap-1">
               <Button size="icon" variant="ghost" className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-accent/50">
                 <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
-              <Button size="icon" className="h-7 w-7 sm:h-8 sm:w-8 gradient-primary hover:shadow-medium">
+              <Button 
+                type="submit"
+                size="icon" 
+                disabled={!input.trim() || disabled}
+                className="h-7 w-7 sm:h-8 sm:w-8 gradient-primary hover:shadow-medium disabled:opacity-50"
+                onClick={handleSubmit}
+              >
                 <Send className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             </div>
