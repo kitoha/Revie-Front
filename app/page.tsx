@@ -10,7 +10,7 @@ import { EmbeddingProgress } from "../components/embedding-progress"
 import { Button } from "../components/ui/button"
 import { Code, MessageSquare, AlertCircle } from "lucide-react"
 import { cn } from "../lib/utils"
-import { analyzePullRequest, getReviewList, getDiffs, generateEmbeddings, sendChatMessage, getChatHistory, ApiError } from "../lib/api"
+import { analyzePullRequest, getReviewList, getDiffsStream, getDiffs, generateEmbeddings, sendChatMessage, getChatHistory, ApiError } from "../lib/api"
 import { DiffItem, ReviewSession, ReviewListDto, Message } from "../lib/types"
 
 export default function HomePage() {
@@ -29,25 +29,50 @@ export default function HomePage() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   
+  const [isLoadingDiffs, setIsLoadingDiffs] = useState(false)
+  const [diffStreamEventSource, setDiffStreamEventSource] = useState<EventSource | null>(null)
+  
   const [isGeneratingEmbeddings, setIsGeneratingEmbeddings] = useState(false)
   const [embeddingProgress, setEmbeddingProgress] = useState<{ total: number, completed: string[] }>({ total: 0, completed: [] })
   const [showEmbeddingProgress, setShowEmbeddingProgress] = useState(false)
 
   const handleAnalyzePR = useCallback(async (pullRequestUrl: string) => {
     setIsLoading(true)
+    setIsLoadingDiffs(true)
     setError(null)
+    setDiffs([])
     
     try {
+      const { session: newSession, eventSource } = await analyzePullRequest(
+        pullRequestUrl,
+        (diff) => {
+          setDiffs(prev => {
+            const exists = prev.some(existingDiff => existingDiff.id === diff.id)
+            if (exists) {
+              return prev
+            }
+            
+            const newDiffs = [...prev, diff]
 
-      const { session: newSession, diffs: newDiffs } = await analyzePullRequest(pullRequestUrl)
+            if (prev.length === 0 && diff) {
+              setSelectedFileId(diff.id)
+            }
+            return newDiffs
+          })
+        },
+        () => {
+          setIsLoadingDiffs(false)
+        },
+        (error) => {
+          console.error('Diff streaming error:', error)
+          setIsLoadingDiffs(false)
+          setError('Diff 로딩 중 오류가 발생했습니다.')
+        }
+      )
       
       setSession(newSession)
-      setDiffs(newDiffs)
       setCurrentSessionId(newSession.id)
-      
-      if (newDiffs.length > 0) {
-        setSelectedFileId(newDiffs[0].id)
-      }
+      setDiffStreamEventSource(eventSource)
       
       //임베딩 생성 (현재 비활성화)
       // setIsGeneratingEmbeddings(true)
@@ -79,6 +104,7 @@ export default function HomePage() {
         setError('PR 분석 중 오류가 발생했습니다.')
       }
       console.error('PR 분석 오류:', err)
+      setIsLoadingDiffs(false)
       // setIsGeneratingEmbeddings(false)
       // setShowEmbeddingProgress(false)
     } finally {
@@ -94,25 +120,37 @@ export default function HomePage() {
     setSelectedReviewId(sessionId)
     setCurrentSessionId(sessionId)
     setIsLoading(true)
+    setIsLoadingDiffs(true)
     setError(null)
+    setDiffs([])
     
     try {
       const diffs = await getDiffs(sessionId)
-      setDiffs(diffs)
       
-      if (diffs.length > 0) {
-        setSelectedFileId(diffs[0].id)
+      const uniqueDiffs = diffs.filter((diff, index, self) => 
+        index === self.findIndex(d => d.id === diff.id)
+      )
+      setDiffs(uniqueDiffs)
+      if (uniqueDiffs.length > 0) {
+        setSelectedFileId(uniqueDiffs[0].id)
       }
+      setIsLoadingDiffs(false)
+      setDiffStreamEventSource(null)
       
       const chatHistory = await getChatHistory(sessionId)
       setMessages(chatHistory.messages)
     } catch (err) {
-      if (err instanceof ApiError) {
+      console.error('리뷰 로드 오류:', err)
+      setIsLoadingDiffs(false)
+      
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('ERR_CONNECTION_REFUSED')) {
+        setError('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.')
+      } else if (err instanceof ApiError) {
         setError(`API 오류 (${err.status}): ${err.message}`)
       } else {
         setError('리뷰 로드 중 오류가 발생했습니다.')
       }
-      console.error('리뷰 로드 오류:', err)
     } finally {
       setIsLoading(false)
     }
@@ -173,6 +211,14 @@ export default function HomePage() {
     loadReviewList()
   }, [loadReviewList])
 
+  useEffect(() => {
+    return () => {
+      if (diffStreamEventSource) {
+        diffStreamEventSource.close()
+      }
+    }
+  }, [diffStreamEventSource])
+
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
       <TopNavigation 
@@ -230,23 +276,24 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden" style={{ minHeight: 'calc(100vh - 120px)' }}>
         <div className={cn(
-          "flex-1 flex flex-col",
+          "flex flex-col",
           activeTab === "code" ? "flex" : "hidden",
-          "lg:flex"
-        )}>
+          "lg:flex lg:w-2/3"
+        )} style={{ minHeight: 'calc(100vh - 120px)' }}>
           <CodeViewer 
             diffs={diffs}
             selectedFileId={selectedFileId}
             onFileSelect={handleFileSelect}
             sessionTitle={session?.title}
+            isLoadingDiffs={isLoadingDiffs}
           />
         </div>
         <div className={cn(
-          "flex-1 flex flex-col",
+          "flex flex-col",
           activeTab === "chat" ? "flex" : "hidden",
-          "lg:flex"
+          "lg:flex lg:w-1/3 lg:min-w-[400px]"
         )}>
           <ChatPanel 
             sessionId={currentSessionId}

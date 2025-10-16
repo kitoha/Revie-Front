@@ -3,7 +3,7 @@
 import { Menu, Sparkles, Search, Loader2 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
-import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "./ui/sheet"
 import { ReviewList } from "./review-list"
 import { useState } from "react"
 
@@ -49,6 +49,7 @@ export function TopNavigation({
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-80 p-0">
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <ReviewList 
             diffs={diffs} 
             selectedFileId={selectedFileId} 

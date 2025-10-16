@@ -21,7 +21,7 @@ export function ChatPanel({ sessionId, messages, isStreaming = false }: ChatPane
   }, [displayedMessages])
 
   useEffect(() => {
-    if (messages.length === 0) {
+    if (!messages || messages.length === 0) {
       setDisplayedMessages([])
       return
     }

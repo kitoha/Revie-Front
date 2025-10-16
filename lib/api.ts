@@ -1,4 +1,4 @@
-import { ReviewSession, DiffResponse, ReviewListDto, FetchPRResponse, ChatHistoryResponse, Message, CompressionStats, DiffCountResponse } from './types'
+import { ReviewSession, DiffResponse, ReviewListDto, FetchPRResponse, ChatHistoryResponse, Message, CompressionStats, DiffCountResponse, DiffItem } from './types'
 
 const BASE_URL = 'http://localhost:8080/api'
 const USER_ID = 'user-123'
@@ -45,7 +45,7 @@ async function apiRequest<T>(
     if (error instanceof ApiError) {
       throw error
     }
-
+    
     throw new ApiError(0, error instanceof Error ? error.message : 'Unknown error')
   }
 }
@@ -78,19 +78,86 @@ export async function importPRDiff(sessionId: string, pullRequestUrl: string): P
 }
 
 
+export function getDiffsStream(
+  sessionId: string,
+  onDiff: (diff: DiffItem) => void,
+  onComplete: () => void,
+  onError: (error: Error) => void
+): EventSource {
+  const eventSource = new EventSource(`${BASE_URL}/diffs/${sessionId}/content/stream`, {
+    withCredentials: false
+  })
+
+  // 연결 성공 시 로그
+  eventSource.onopen = () => {
+    console.log('SSE connection established successfully')
+  }
+
+  eventSource.onmessage = (event) => {
+    try {
+      const diff = JSON.parse(event.data)
+      onDiff(diff)
+    } catch (error) {
+      console.error('Failed to parse diff:', error)
+      onError(error as Error)
+    }
+  }
+
+  eventSource.onerror = (error) => {
+    console.error('SSE error:', error)
+    console.error('EventSource readyState:', eventSource.readyState)
+    console.error('EventSource URL:', eventSource.url)
+    
+    if (eventSource.readyState === EventSource.CLOSED) {
+      console.log('SSE connection was closed by server')
+      onError(new Error('실시간 스트리밍 연결이 서버에 의해 종료되었습니다'))
+    } else if (eventSource.readyState === EventSource.CONNECTING) {
+      console.log('SSE connection failed to establish - server may be down')
+      onError(new Error('실시간 스트리밍 연결에 실패했습니다. 서버가 실행 중인지 확인해주세요.'))
+    } else {
+      console.log('SSE connection error - unknown state')
+      onError(new Error('실시간 스트리밍 중 알 수 없는 오류가 발생했습니다'))
+    }
+    
+    eventSource.close()
+  }
+
+  eventSource.addEventListener('complete', () => {
+    console.log('SSE stream completed successfully')
+    onComplete()
+    eventSource.close()
+  })
+
+  return eventSource
+}
+
 export async function getDiffs(sessionId: string): Promise<DiffItem[]> {
-  const response = await apiRequest<any>(`/diffs/${sessionId}`)
-  
-  if (response && response.success && Array.isArray(response.data)) {
-    return response.data
+  try {
+    const response = await fetch(`${BASE_URL}/diffs/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new ApiError(response.status, `API 오류 (${response.status}): ${await response.text()}`)
+    }
+
+    const result = await response.json()
+    
+    if (Array.isArray(result)) {
+      return result
+    } else if (result.success && Array.isArray(result.data)) {
+      return result.data
+    } else {
+      console.warn('Unexpected response format:', result)
+      return []
+    }
+  } catch (error) {
+    console.error('Failed to fetch diffs:', error)
+    throw error
   }
-  
-  if (Array.isArray(response)) {
-    return response
-  }
-  
-  console.warn('Unexpected response format:', response)
-  return []
 }
 
 
@@ -189,19 +256,54 @@ export async function deleteChatHistory(sessionId: string): Promise<void> {
   })
 }
 
-export async function analyzePullRequest(pullRequestUrl: string): Promise<{
+export async function analyzePullRequest(
+  pullRequestUrl: string,
+  onDiff: (diff: DiffItem) => void,
+  onComplete: () => void,
+  onError: (error: Error) => void
+): Promise<{
   session: ReviewSession
-  diffs: DiffItem[]
+  eventSource: EventSource | null
 }> {
   try {
-    
     const session = await createReviewSession(pullRequestUrl)
     
     await importPRDiff(session.id, pullRequestUrl)
     
-    const diffs = await getDiffs(session.id)
-    
-    return { session, diffs }
+    try {
+      const eventSource = getDiffsStream(
+        session.id,
+        onDiff,
+        onComplete,
+        (streamError) => {
+          console.warn('SSE stream failed, falling back to REST API:', streamError)
+          getDiffs(session.id)
+            .then(diffs => {
+              const uniqueDiffs = diffs.filter((diff, index, self) => 
+                index === self.findIndex(d => d.id === diff.id)
+              )
+              uniqueDiffs.forEach(onDiff)
+              onComplete()
+            })
+            .catch(restError => {
+              console.error('REST API fallback also failed:', restError)
+              onError(restError)
+            })
+        }
+      )
+      
+      return { session, eventSource }
+    } catch (streamError) {
+      console.warn('SSE stream setup failed, using REST API:', streamError)
+      const diffs = await getDiffs(session.id)
+      const uniqueDiffs = diffs.filter((diff, index, self) => 
+        index === self.findIndex(d => d.id === diff.id)
+      )
+      uniqueDiffs.forEach(onDiff)
+      onComplete()
+      
+      return { session, eventSource: null }
+    }
   } catch (error) {
     if (error instanceof ApiError) {
       throw error

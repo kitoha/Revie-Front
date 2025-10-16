@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { DiffItem, FileType } from "../lib/types"
 import { cn } from "../lib/utils"
 import { 
@@ -8,7 +9,9 @@ import {
   File, 
   Database,
   Plus,
-  Minus
+  Minus,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 
 interface FileTabsProps {
@@ -17,7 +20,6 @@ interface FileTabsProps {
   onFileSelect: (fileId: string) => void
 }
 
-// 파일 확장자별 아이콘 매핑
 const getFileIcon = (extension: string): FileType => {
   const ext = extension.toLowerCase()
   
@@ -49,7 +51,6 @@ const getFileIcon = (extension: string): FileType => {
   return 'other'
 }
 
-// 파일 타입별 아이콘 컴포넌트
 const FileTypeIcon = ({ fileType, className }: { fileType: FileType; className?: string }) => {
   const iconProps = { className: cn("h-4 w-4", className) }
   
@@ -94,7 +95,6 @@ const FileTypeIcon = ({ fileType, className }: { fileType: FileType; className?:
   }
 }
 
-// Diff 통계 계산 (추가/삭제 라인 수)
 const getDiffStats = (diffContent: string) => {
   const lines = diffContent.split('\n')
   let added = 0
@@ -116,9 +116,60 @@ export function FileTabs({ diffs, selectedFileId, onFileSelect }: FileTabsProps)
     return null
   }
 
+  const currentIndex = diffs.findIndex(diff => diff.id === selectedFileId)
+  const canGoLeft = currentIndex > 0
+  const canGoRight = currentIndex < diffs.length - 1
+
+  const goToPrevious = () => {
+    if (canGoLeft) {
+      onFileSelect(diffs[currentIndex - 1].id)
+    }
+  }
+
+  const goToNext = () => {
+    if (canGoRight) {
+      onFileSelect(diffs[currentIndex + 1].id)
+    }
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey) {
+        if (event.key === 'ArrowLeft' && canGoLeft) {
+          event.preventDefault()
+          goToPrevious()
+        } else if (event.key === 'ArrowRight' && canGoRight) {
+          event.preventDefault()
+          goToNext()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [canGoLeft, canGoRight, currentIndex, diffs])
+
   return (
     <div className="border-b border-border bg-card/50 backdrop-blur-sm">
-      <div className="flex overflow-x-auto scrollbar-hide">
+      <div className="flex items-center">
+        {/* 이전 파일 버튼 */}
+        <button
+          onClick={goToPrevious}
+          disabled={!canGoLeft}
+          className={cn(
+            "flex items-center justify-center w-8 h-8 mx-1 rounded transition-smooth",
+            "hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20",
+            canGoLeft 
+              ? "text-foreground hover:text-primary" 
+              : "text-muted-foreground cursor-not-allowed"
+          )}
+          title="이전 파일"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {/* 파일 탭들 */}
+        <div className="flex overflow-x-auto scrollbar-hide flex-1">
         {diffs.map((diff) => {
           const fileType = getFileIcon(diff.fileExtension)
           const stats = getDiffStats(diff.diffContent)
@@ -155,6 +206,23 @@ export function FileTabs({ diffs, selectedFileId, onFileSelect }: FileTabsProps)
             </button>
           )
         })}
+        </div>
+
+        {/* 다음 파일 버튼 */}
+        <button
+          onClick={goToNext}
+          disabled={!canGoRight}
+          className={cn(
+            "flex items-center justify-center w-8 h-8 mx-1 rounded transition-smooth",
+            "hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20",
+            canGoRight 
+              ? "text-foreground hover:text-primary" 
+              : "text-muted-foreground cursor-not-allowed"
+          )}
+          title="다음 파일"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )
