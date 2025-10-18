@@ -138,7 +138,8 @@ export default function HomePage() {
       setDiffStreamEventSource(null)
       
       const chatHistory = await getChatHistory(sessionId)
-      setMessages(chatHistory.messages)
+      const messages = Array.isArray(chatHistory.messages) ? chatHistory.messages : []
+      setMessages(messages)
     } catch (err) {
       console.error('리뷰 로드 오류:', err)
       setIsLoadingDiffs(false)
@@ -173,7 +174,10 @@ export default function HomePage() {
       content: message,
       timestamp: new Date().toISOString()
     }
-    setMessages(prev => [...prev, userMessage])
+    setMessages(prev => {
+      const currentMessages = Array.isArray(prev) ? prev : []
+      return [...currentMessages, userMessage]
+    })
     setIsStreaming(true)
     
     const assistantMessage: Message = {
@@ -181,7 +185,10 @@ export default function HomePage() {
       content: '',
       timestamp: new Date().toISOString()
     }
-    setMessages(prev => [...prev, assistantMessage])
+    setMessages(prev => {
+      const currentMessages = Array.isArray(prev) ? prev : []
+      return [...currentMessages, assistantMessage]
+    })
     
     try {
       const eventSource = sendChatMessage(
@@ -189,10 +196,14 @@ export default function HomePage() {
         message,
         (chunk) => {
           setMessages(prev => {
-            const newMessages = [...prev]
+            const currentMessages = Array.isArray(prev) ? prev : []
+            const newMessages = [...currentMessages]
             const lastMessage = newMessages[newMessages.length - 1]
-            if (lastMessage.role === 'ASSISTANT') {
-              lastMessage.content += chunk
+            if (lastMessage && lastMessage.role === 'ASSISTANT') {
+              newMessages[newMessages.length - 1] = {
+                ...lastMessage,
+                content: lastMessage.content + chunk
+              }
             }
             return newMessages
           })
@@ -218,6 +229,14 @@ export default function HomePage() {
       }
     }
   }, [diffStreamEventSource])
+
+  useEffect(() => {
+    return () => {
+      if (diffStreamEventSource) {
+        diffStreamEventSource.close()
+      }
+    }
+  }, [])
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-background via-background to-muted/20">

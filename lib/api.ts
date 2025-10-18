@@ -204,38 +204,85 @@ export function sendChatMessage(
   onChunk: (chunk: string) => void,
   onComplete: () => void
 ): EventSource {
-  const eventSource = new EventSource(`${BASE_URL}/chat/${sessionId}/stream`, {
-    withCredentials: false
-  })
-
+  const controller = new AbortController()
+  
   fetch(`${BASE_URL}/chat/${sessionId}/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-User-Id': USER_ID,
+      'Accept': 'text/event-stream',
+      'Cache-Control': 'no-cache',
     },
-    body: JSON.stringify({ message })
+    body: JSON.stringify({ message }),
+    signal: controller.signal
+  }).then(async response => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('No response body reader available')
+    }
+    
+    const decoder = new TextDecoder()
+    let buffer = ''
+    
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          onComplete()
+          break
+        }
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        
+        for (const line of lines) {
+          if (line.trim() === '') {
+            continue
+          }
+          
+          if (line.startsWith('data:')) {
+            const data = line.slice(5).trim()
+            if (data === '[DONE]') {
+              onComplete()
+              return
+            } else if (data) {
+              onChunk(data)
+            }
+          } else if (line.startsWith('event:')) {
+            const event = line.slice(6).trim()
+            if (event === 'complete') {
+              onComplete()
+              return
+            }
+          }
+        }
+      }
+    } catch (streamError) {
+      console.error('Stream reading error:', streamError)
+      onComplete()
+    } finally {
+      reader.releaseLock()
+    }
   }).catch(error => {
-    console.error('Failed to send message:', error)
-    eventSource.close()
+    console.error('Failed to send message or read stream:', error)
+    onComplete()
   })
 
-  eventSource.onmessage = (event) => {
-    const data = event.data
-    if (data === '[DONE]') {
-      onComplete()
-      eventSource.close()
-    } else {
-      onChunk(data)
-    }
-  }
+  const mockEventSource = {
+    close: () => controller.abort(),
+    readyState: 1,
+    url: `${BASE_URL}/chat/${sessionId}/stream`
+  } as EventSource
 
-  eventSource.onerror = (error) => {
-    console.error('SSE error:', error)
-    eventSource.close()
-  }
-
-  return eventSource
+  return mockEventSource
 }
 
 export async function getChatHistory(sessionId: string): Promise<ChatHistoryResponse> {

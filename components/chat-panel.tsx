@@ -26,31 +26,7 @@ export function ChatPanel({ sessionId, messages, isStreaming = false }: ChatPane
       return
     }
 
-    const lastMessage = messages[messages.length - 1]
-    if (lastMessage.role === 'ASSISTANT' && isStreaming) {
-      let currentIndex = 0
-      const content = lastMessage.content
-      
-      const timer = setInterval(() => {
-        if (currentIndex < content.length) {
-          const partialContent = content.substring(0, currentIndex + 1)
-          setDisplayedMessages(prev => {
-            const newMessages = [...prev]
-            if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'ASSISTANT') {
-              newMessages[newMessages.length - 1] = { ...newMessages[newMessages.length - 1], content: partialContent }
-            }
-            return newMessages
-          })
-          currentIndex++
-        } else {
-          clearInterval(timer)
-        }
-      }, 20)
-
-      return () => clearInterval(timer)
-    } else {
-      setDisplayedMessages(messages)
-    }
+    setDisplayedMessages(messages)
   }, [messages, isStreaming])
 
   if (!sessionId) {
