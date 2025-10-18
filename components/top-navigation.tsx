@@ -48,7 +48,7 @@ export function TopNavigation({
             <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-80 p-0">
+        <SheetContent side="left" className="w-80 p-0 max-w-[80vw]">
           <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <ReviewList 
             diffs={diffs} 

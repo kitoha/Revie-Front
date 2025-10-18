@@ -6,6 +6,150 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { cn } from "../lib/utils"
 import { Message } from "../lib/types"
 
+function renderMarkdown(text: string) {
+  const parts = []
+  let remaining = text
+  
+  while (remaining.length > 0) {
+    const boldMatch = remaining.match(/\*\*(.*?)\*\*/)
+    const italicMatch = remaining.match(/\*(.*?)\*/)
+    const codeMatch = remaining.match(/`(.*?)`/)
+    
+    let match = null
+    let type = ''
+    
+    if (boldMatch && (!italicMatch || boldMatch.index! < italicMatch.index!) && (!codeMatch || boldMatch.index! < codeMatch.index!)) {
+      match = boldMatch
+      type = 'bold'
+    } else if (italicMatch && (!codeMatch || italicMatch.index! < codeMatch.index!)) {
+      match = italicMatch
+      type = 'italic'
+    } else if (codeMatch) {
+      match = codeMatch
+      type = 'code'
+    }
+    
+    if (match) {
+      if (match.index! > 0) {
+        parts.push(remaining.slice(0, match.index!))
+      }
+      
+      if (type === 'bold') {
+        parts.push(<strong key={parts.length} className="font-semibold text-foreground">{match[1]}</strong>)
+      } else if (type === 'italic') {
+        parts.push(<em key={parts.length} className="italic">{match[1]}</em>)
+      } else if (type === 'code') {
+        parts.push(<code key={parts.length} className="bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-xs font-mono border border-blue-200 dark:border-blue-800">{match[1]}</code>)
+      }
+      
+      remaining = remaining.slice(match.index! + match[0].length)
+    } else {
+      parts.push(remaining)
+      break
+    }
+  }
+  
+  return parts
+}
+
+function parseMessageContent(content: string) {
+  const lines = content.split('\n')
+  const elements = []
+  let inCodeBlock = false
+  let codeBlockContent = []
+  let listItems = []
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        elements.push(
+          <div key={`code-${elements.length}`} className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg font-mono text-xs mb-3 border border-blue-200 dark:border-blue-800 overflow-x-auto shadow-sm">
+            <pre className="whitespace-pre-wrap text-blue-800 dark:text-blue-200">{codeBlockContent.join('\n')}</pre>
+          </div>
+        )
+        codeBlockContent = []
+        inCodeBlock = false
+      } else {
+        inCodeBlock = true
+      }
+      continue
+    }
+    
+    if (inCodeBlock) {
+      codeBlockContent.push(line)
+      continue
+    }
+    
+    if (line.trim().startsWith('*') || line.trim().startsWith('-')) {
+      listItems.push(
+        <li key={`list-${i}`} className="ml-4 mb-1 flex items-start">
+          <span className="mr-2 text-muted-foreground">•</span>
+          <span>{renderMarkdown(line.replace(/^[\*\-\s]+/, ''))}</span>
+        </li>
+      )
+      continue
+    }
+    
+    if (line.trim().startsWith('**') && line.includes(':**')) {
+      elements.push(
+        <div key={`header-${i}`} className="font-semibold text-foreground mb-2 mt-3 first:mt-0">
+          {renderMarkdown(line)}
+        </div>
+      )
+      continue
+    }
+    
+    if (line.trim().startsWith('**') && line.includes('**')) {
+      elements.push(
+        <div key={`subheader-${i}`} className="font-medium text-foreground mb-2 mt-2">
+          {renderMarkdown(line)}
+        </div>
+      )
+      continue
+    }
+    
+    if (line.trim().startsWith('```') || (line.trim().startsWith('@') && (line.includes('class ') || line.includes('interface ') || line.includes('public ') || line.includes('private ') || line.includes('protected ')))) {
+      elements.push(
+        <div key={`code-${i}`} className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded font-mono text-xs mb-2 border border-blue-200 dark:border-blue-800 overflow-x-auto text-blue-800 dark:text-blue-200 shadow-sm">
+          {line}
+        </div>
+      )
+      continue
+    }
+    
+    if (line.trim() === '') {
+      if (listItems.length > 0) {
+        elements.push(
+          <ul key={`list-group-${elements.length}`} className="mb-3">
+            {listItems}
+          </ul>
+        )
+        listItems = []
+      }
+      elements.push(<br key={`br-${i}`} />)
+      continue
+    }
+    
+    elements.push(
+      <div key={`text-${i}`} className="mb-2 leading-relaxed">
+        {renderMarkdown(line)}
+      </div>
+    )
+  }
+  
+  if (listItems.length > 0) {
+    elements.push(
+      <ul key={`list-group-final`} className="mb-3">
+        {listItems}
+      </ul>
+    )
+  }
+  
+  return elements
+}
+
 interface ChatPanelProps {
   sessionId?: string | null
   messages: Message[]
@@ -94,7 +238,7 @@ export function ChatPanel({ sessionId, messages, isStreaming = false }: ChatPane
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
         {displayedMessages.map((message, index) => (
           <div key={index} className={cn("flex gap-3 transition-smooth", message.role === "USER" ? "flex-row-reverse" : "flex-row")}>
             <Avatar className="h-8 w-8 flex-shrink-0 shadow-soft">
@@ -113,13 +257,15 @@ export function ChatPanel({ sessionId, messages, isStreaming = false }: ChatPane
             </Avatar>
             <div
               className={cn(
-                "flex-1 rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft transition-smooth max-w-[85%]",
+                "flex-1 rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft transition-smooth max-w-[90%]",
                 message.role === "USER" 
                   ? "gradient-primary text-primary-foreground" 
                   : "bg-muted/50 text-foreground hover:shadow-medium border border-border/30",
               )}
             >
-              {message.content}
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                {parseMessageContent(message.content)}
+              </div>
             </div>
           </div>
         ))}
