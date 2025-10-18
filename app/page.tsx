@@ -220,94 +220,114 @@ export default function HomePage() {
   }, [diffStreamEventSource])
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
-      <TopNavigation 
-        onAnalyzePR={handleAnalyzePR} 
-        isLoading={isLoading}
-        diffs={diffs}
-        selectedFileId={selectedFileId}
-        onFileSelect={handleFileSelect}
-        reviewList={reviewList}
-        selectedReviewId={selectedReviewId}
-        onReviewSelect={handleReviewSelect}
-      />
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background to-muted/20">
+      {/* 상단 네비게이션 */}
+      <div className="sticky top-0 z-50">
+        <TopNavigation 
+          onAnalyzePR={handleAnalyzePR} 
+          isLoading={isLoading}
+          diffs={diffs}
+          selectedFileId={selectedFileId}
+          onFileSelect={handleFileSelect}
+          reviewList={reviewList}
+          selectedReviewId={selectedReviewId}
+          onReviewSelect={handleReviewSelect}
+        />
 
-      {/* 에러 메시지 */}
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4" />
-          <span className="text-sm">{error}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setError(null)}
-            className="ml-auto text-destructive hover:bg-destructive/20"
-          >
-            ×
-          </Button>
-        </div>
-      )}
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="mx-4 mt-4 bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg flex items-center gap-2 shadow-soft">
+            <AlertCircle className="h-4 w-4" />
+            <span className="text-sm">{error}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setError(null)}
+              className="ml-auto text-destructive hover:bg-destructive/20"
+            >
+              ×
+            </Button>
+          </div>
+        )}
 
-      {/* 모바일 탭 네비게이션 */}
-      <div className="lg:hidden border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="flex">
-          <Button
-            variant={activeTab === "code" ? "default" : "ghost"}
-            className={cn(
-              "flex-1 rounded-none border-0 h-12 gap-2",
-              activeTab === "code" ? "gradient-primary text-primary-foreground" : "hover:bg-accent/50"
-            )}
-            onClick={() => setActiveTab("code")}
-          >
-            <Code className="h-4 w-4" />
-            Code
-          </Button>
-          <Button
-            variant={activeTab === "chat" ? "default" : "ghost"}
-            className={cn(
-              "flex-1 rounded-none border-0 h-12 gap-2",
-              activeTab === "chat" ? "gradient-primary text-primary-foreground" : "hover:bg-accent/50"
-            )}
-            onClick={() => setActiveTab("chat")}
-          >
-            <MessageSquare className="h-4 w-4" />
-            Chat
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden" style={{ minHeight: 'calc(100vh - 120px)' }}>
-        <div className={cn(
-          "flex flex-col",
-          activeTab === "code" ? "flex" : "hidden",
-          "lg:flex lg:w-2/3"
-        )} style={{ minHeight: 'calc(100vh - 120px)' }}>
-          <CodeViewer 
-            diffs={diffs}
-            selectedFileId={selectedFileId}
-            onFileSelect={handleFileSelect}
-            sessionTitle={session?.title}
-            isLoadingDiffs={isLoadingDiffs}
-          />
-        </div>
-        <div className={cn(
-          "flex flex-col",
-          activeTab === "chat" ? "flex" : "hidden",
-          "lg:flex lg:w-1/3 lg:min-w-[400px]"
-        )}>
-          <ChatPanel 
-            sessionId={currentSessionId}
-            messages={messages}
-            isStreaming={isStreaming}
-          />
+        {/* 모바일 탭 네비게이션 */}
+        <div className="lg:hidden border-b border-border bg-card/50 backdrop-blur-sm">
+          <div className="flex">
+            <Button
+              variant={activeTab === "code" ? "default" : "ghost"}
+              className={cn(
+                "flex-1 rounded-none border-0 h-12 gap-2",
+                activeTab === "code" ? "gradient-primary text-primary-foreground" : "hover:bg-accent/50"
+              )}
+              onClick={() => setActiveTab("code")}
+            >
+              <Code className="h-4 w-4" />
+              Code
+            </Button>
+            <Button
+              variant={activeTab === "chat" ? "default" : "ghost"}
+              className={cn(
+                "flex-1 rounded-none border-0 h-12 gap-2",
+                activeTab === "chat" ? "gradient-primary text-primary-foreground" : "hover:bg-accent/50"
+              )}
+              onClick={() => setActiveTab("chat")}
+            >
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </Button>
+          </div>
         </div>
       </div>
 
-      <MessageInput 
-        sessionId={currentSessionId}
-        onSendMessage={handleSendMessage}
-        disabled={isStreaming}
-      />
+      {/* 메인 컨텐츠 영역 */}
+      <div className="container mx-auto px-4 py-4 sm:py-6 lg:py-8">
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 h-[calc(100vh-180px)] sm:h-[calc(100vh-200px)]">
+          {/* 코드 리뷰 영역 */}
+          <div className={cn(
+            "flex flex-col",
+            activeTab === "code" ? "flex" : "hidden",
+            "lg:flex lg:flex-1"
+          )}>
+            <div className="bg-card/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-border/50 shadow-soft overflow-hidden h-full">
+              <CodeViewer 
+                diffs={diffs}
+                selectedFileId={selectedFileId}
+                onFileSelect={handleFileSelect}
+                sessionTitle={session?.title}
+                isLoadingDiffs={isLoadingDiffs}
+              />
+            </div>
+          </div>
+
+          {/* 채팅 영역 */}
+          <div className={cn(
+            "flex flex-col",
+            activeTab === "chat" ? "flex" : "hidden",
+            "lg:flex lg:w-96 lg:min-w-[400px]"
+          )}>
+            <div className="bg-card/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-border/50 shadow-soft overflow-hidden h-full">
+              <ChatPanel 
+                sessionId={currentSessionId}
+                messages={messages}
+                isStreaming={isStreaming}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 메시지 입력 영역 */}
+      <div className="sticky bottom-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border/50">
+        <div className="container mx-auto px-4 py-3 sm:py-4">
+          <div className="bg-card/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-border/50 shadow-soft p-3 sm:p-4">
+            <MessageInput 
+              sessionId={currentSessionId}
+              onSendMessage={handleSendMessage}
+              disabled={isStreaming}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* 임베딩 진행상황 모달 (현재 비활성화) */}
       {/* <EmbeddingProgress

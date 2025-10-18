@@ -88,11 +88,11 @@ export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle, 
 
   if (safeDiffs.length === 0) {
     return (
-      <main className="flex-1 lg:flex-1 flex flex-col bg-code-bg border-r-0 lg:border-r border-border">
-        <header className="h-10 sm:h-12 border-b border-border bg-card/50 backdrop-blur-sm px-4 sm:px-6 flex items-center shadow-soft">
+      <main className="flex-1 lg:flex-1 flex flex-col bg-code-bg border-r-0 lg:border-r border-border h-full">
+        <header className="h-10 sm:h-12 border-b border-border bg-card/50 backdrop-blur-sm px-4 sm:px-6 flex items-center shadow-soft flex-shrink-0">
           <h2 className="text-xs sm:text-sm font-medium text-foreground truncate">Code Viewer</h2>
         </header>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center min-h-0">
           <div className="text-center text-muted-foreground">
             <GitPullRequest className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="text-sm">PR을 분석하면 코드가 표시됩니다</p>
@@ -103,7 +103,7 @@ export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle, 
   }
 
   return (
-    <main className="flex-1 lg:flex-1 flex flex-col bg-code-bg border-r-0 lg:border-r border-border">
+    <main className="flex-1 lg:flex-1 flex flex-col bg-code-bg border-r-0 lg:border-r border-border h-full">
       {/* 파일 탭 */}
       <FileTabs 
         diffs={diffs} 
@@ -112,7 +112,7 @@ export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle, 
       />
       
       {/* 헤더 */}
-      <header className="h-10 sm:h-12 border-b border-border bg-card/50 backdrop-blur-sm px-4 sm:px-6 flex items-center shadow-soft">
+      <header className="h-10 sm:h-12 border-b border-border bg-card/50 backdrop-blur-sm px-4 sm:px-6 flex items-center shadow-soft flex-shrink-0">
         <h2 className="text-xs sm:text-sm font-medium text-foreground truncate">
           {selectedDiff ? selectedDiff.filePath : sessionTitle || "Code Viewer"}
         </h2>
@@ -125,13 +125,17 @@ export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle, 
       </header>
 
       {/* 코드 내용 - 개선된 스크롤바와 레이아웃 */}
-      <div className="flex-1 code-viewer-container" style={{ minHeight: '400px', maxHeight: 'calc(100vh - 200px)' }}>
+      <div className="flex-1 code-viewer-container relative overflow-hidden min-h-0">
         {parsedLines.length > 0 ? (
-          <div className="font-mono text-xs sm:text-sm min-w-full h-full">
+          <div className="font-mono text-xs sm:text-sm h-full w-full">
             {/* 가로 스크롤을 위한 컨테이너 - 스크롤바 겹침 방지 */}
-            <div className="overflow-x-auto overflow-y-auto code-scrollbar h-full">
+            <div className="overflow-x-auto overflow-y-auto code-scrollbar scrollbar-thin h-full w-full">
               <div className="min-w-max pr-2">
-                {parsedLines.map((line, index) => (
+                <div 
+                  key={selectedFileId}
+                  className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
+                >
+                  {parsedLines.map((line, index) => (
                   <div
                     key={line.num}
                     onMouseEnter={() => setHoveredLine(line.num)}
@@ -181,6 +185,7 @@ export function CodeViewer({ diffs, selectedFileId, onFileSelect, sessionTitle, 
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             </div>
           </div>

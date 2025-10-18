@@ -169,8 +169,8 @@ export function FileTabs({ diffs, selectedFileId, onFileSelect }: FileTabsProps)
         </button>
 
         {/* 파일 탭들 */}
-        <div className="flex overflow-x-auto scrollbar-hide flex-1">
-        {diffs.map((diff) => {
+        <div className="flex overflow-x-auto scrollbar-thin flex-1">
+        {diffs.map((diff, index) => {
           const fileType = getFileIcon(diff.fileExtension)
           const stats = getDiffStats(diff.diffContent)
           const isSelected = selectedFileId === diff.id
@@ -180,12 +180,14 @@ export function FileTabs({ diffs, selectedFileId, onFileSelect }: FileTabsProps)
               key={diff.id}
               onClick={() => onFileSelect(diff.id)}
               className={cn(
-                "flex items-center gap-2 px-4 py-3 border-b-2 transition-smooth whitespace-nowrap",
+                "flex items-center gap-2 px-4 py-3 border-b-2 transition-all duration-300 whitespace-nowrap",
                 "hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/20",
+                "animate-in fade-in-0 slide-in-from-bottom-2",
                 isSelected 
-                  ? "border-primary bg-primary/5 text-primary" 
+                  ? "border-primary bg-primary/5 text-primary shadow-sm" 
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
+              style={{ animationDelay: `${index * 50}ms` }}
             >
               <FileTypeIcon fileType={fileType} />
               <div className="flex flex-col items-start min-w-0">
