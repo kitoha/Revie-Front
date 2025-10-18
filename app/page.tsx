@@ -299,8 +299,8 @@ export default function HomePage() {
       </div>
 
       {/* 메인 컨텐츠 영역 */}
-      <div className="w-full max-w-[1920px] mx-auto px-6 py-4 sm:py-6 lg:py-8">
-        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:gap-8 h-[calc(100vh-200px)] sm:h-[calc(100vh-220px)]">
+      <div className="w-full px-2 py-2">
+        <div className="flex flex-col lg:flex-row gap-2 h-[calc(100vh-140px)]">
           {/* 코드 리뷰 영역 - 50% 고정 */}
           <div className={cn(
             "flex flex-col",
@@ -339,7 +339,7 @@ export default function HomePage() {
 
       {/* 메시지 입력 영역 */}
       <div className="sticky bottom-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border/50">
-        <div className="container mx-auto px-6 py-3 sm:py-4">
+        <div className="w-full px-2 py-2">
           <div className="bg-card/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-border/50 shadow-soft p-3 sm:p-4">
             <MessageInput 
               sessionId={currentSessionId}
